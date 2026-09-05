@@ -433,3 +433,6 @@ FodyWeavers.xsd
 
 # Runtime data: DataProtection key material + collected client logs — not versioned
 rtr-dk/App_Data/
+
+# Lokale arbejdsnoter — ikke versioneret
+.scratch.md

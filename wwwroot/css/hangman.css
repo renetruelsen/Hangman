@@ -1,0 +1,1023 @@
+/* ============================================================
+   Galgeleg — dansk hangman
+   ============================================================ */
+
+:root {
+    --bg-0: #05060f;
+    --bg-1: #0b0f26;
+    --bg-2: #170f38;
+    --line: #262d52;
+    --chalk: #dbe4ff;
+    --glow: #7c8cff;
+    --wood: #c3a982;
+    --rope: #e6bd7c;
+    --ok: #3ddc97;
+    --bad: #ff5d73;
+    --gold: #f5c451;
+    --dim: #8b93c4;
+
+    /* 0 = fuld sundhed, 1 = sidste liv brugt. Styrer hvor truende scenen ser ud. */
+    --tension: 0;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+}
+
+/* Farven ligger på <html>, ikke på <body>. Ellers propagerer body-baggrunden
+   til canvas og males oven på baggrundslagene, der ligger på negativ z-index. */
+html {
+    background: var(--bg-0);
+}
+
+body {
+    font-family: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: transparent;
+    color: var(--chalk);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------- baggrund ---------- */
+
+.sky {
+    position: fixed;
+    inset: 0;
+    z-index: -6;
+    background:
+        radial-gradient(120% 90% at 72% -12%, var(--bg-2) 0%, transparent 55%),
+        radial-gradient(100% 80% at 8% 112%, #1b1040 0%, transparent 60%),
+        linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
+}
+
+.moon {
+    position: fixed;
+    z-index: -5;
+    top: 7%;
+    right: 8%;
+    width: 116px;
+    height: 116px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fdf6dd, #e8dca8 55%, #b9ad7d);
+    box-shadow: 0 0 120px 30px rgba(245, 236, 190, .18);
+    opacity: .78;
+    animation: moonDrift 120s ease-in-out infinite;
+}
+
+@keyframes moonDrift {
+    0%, 100% { transform: translate(0, 0); }
+    50%      { transform: translate(-40px, 18px); }
+}
+
+.stars {
+    position: fixed;
+    inset: 0;
+    z-index: -5;
+    pointer-events: none;
+}
+
+.star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: #fff;
+    animation: twinkle 4s ease-in-out infinite;
+}
+
+@keyframes twinkle {
+    0%, 100% { opacity: .12; transform: scale(.7); }
+    50%      { opacity: .85; transform: scale(1.3); }
+}
+
+.fog {
+    position: fixed;
+    z-index: -4;
+    pointer-events: none;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: .3;
+}
+
+.fog-a {
+    width: 60vw;
+    height: 30vh;
+    left: -10vw;
+    bottom: -8vh;
+    background: #3b2d7a;
+    animation: drift 34s ease-in-out infinite;
+}
+
+.fog-b {
+    width: 50vw;
+    height: 26vh;
+    right: -8vw;
+    bottom: -6vh;
+    background: #1d4d63;
+    animation: drift 44s ease-in-out infinite reverse;
+}
+
+@keyframes drift {
+    0%, 100% { transform: translateX(0) scale(1); }
+    50%      { transform: translateX(12vw) scale(1.15); }
+}
+
+/* Rødmen der lukker sig om scenen efterhånden som livene ryger. */
+.danger {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    background: radial-gradient(95% 85% at 50% 48%, transparent 25%, rgba(122, 12, 34, .6) 100%);
+    opacity: var(--tension);
+    transition: opacity .7s ease;
+}
+
+.vignette {
+    position: fixed;
+    inset: 0;
+    z-index: -3;
+    pointer-events: none;
+    background: radial-gradient(80% 70% at 50% 45%, transparent 38%, rgba(0, 0, 0, .78) 100%);
+    /* Trækker sig efterhånden som --tension stiger, ellers maler den rødmen væk. */
+    opacity: calc(1 - var(--tension) * .45);
+    transition: box-shadow .3s, opacity .7s ease;
+}
+
+#confetti {
+    position: fixed;
+    inset: 0;
+    z-index: 8;
+    pointer-events: none;
+}
+
+.flash {
+    position: fixed;
+    inset: 0;
+    z-index: 12;
+    pointer-events: none;
+    background: radial-gradient(closest-side at var(--hx, 50%) var(--hy, 40%),
+        rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .5) 45%, transparent 78%);
+    opacity: 0;
+}
+
+.flash.fire {
+    animation: flashOut .3s ease-out;
+}
+
+@keyframes flashOut {
+    0%   { opacity: 0; }
+    18%  { opacity: .32; }
+    100% { opacity: 0; }
+}
+
+/* ---------- layout ---------- */
+
+.wrap {
+    position: relative;
+    width: min(1600px, 94vw);
+    height: 100%;
+    margin: 0 auto;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: .8rem;
+    padding: 1.1rem 1rem 1rem;
+}
+
+.wrap.shake {
+    animation: shake .45s cubic-bezier(.36, .07, .19, .97);
+}
+
+@keyframes shake {
+    10%, 90%      { transform: translateX(-3px); }
+    20%, 80%      { transform: translateX(6px); }
+    30%, 50%, 70% { transform: translateX(-11px); }
+    40%, 60%      { transform: translateX(11px); }
+}
+
+/* Runden er slut: ordet løftes op over overlayet, tastaturet træder tilbage. */
+.wrap.finished .panel {
+    position: relative;
+    z-index: 10;
+}
+
+.wrap.finished .keys {
+    opacity: .1;
+    filter: blur(2px);
+    pointer-events: none;
+}
+
+/* ---------- topbar ---------- */
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+h1 {
+    font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+    font-weight: 800;
+    letter-spacing: .14em;
+    font-size: clamp(1.05rem, 2.3vw, 1.9rem);
+    line-height: 1.1;
+    background: linear-gradient(180deg, #fff, var(--gold));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 34px rgba(245, 196, 81, .22);
+}
+
+h1 small {
+    display: block;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 300;
+    font-size: .46em;
+    letter-spacing: .32em;
+    color: var(--dim);
+    -webkit-text-fill-color: var(--dim);
+}
+
+.hud {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    flex-wrap: wrap;
+}
+
+.streak[hidden] {
+    display: none;
+}
+
+.streak {
+    display: flex;
+    align-items: baseline;
+    gap: .35rem;
+    padding: .3rem .8rem;
+    border-radius: 999px;
+    border: 1px solid rgba(245, 196, 81, .35);
+    background: rgba(245, 196, 81, .08);
+    animation: chipIn .35s cubic-bezier(.2, 1.4, .4, 1);
+}
+
+.streak-count {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--gold);
+    line-height: 1;
+}
+
+.streak-label {
+    font-size: .6rem;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+
+.lives {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+
+.lives-label {
+    font-size: .62rem;
+    letter-spacing: .28em;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+
+.hearts {
+    display: flex;
+    gap: .28rem;
+}
+
+.heart {
+    width: 21px;
+    height: 21px;
+    color: var(--bad);
+    filter: drop-shadow(0 0 6px rgba(255, 93, 115, .55));
+    transition: all .5s cubic-bezier(.2, .8, .2, 1);
+}
+
+.heart.gone {
+    color: #4a5490;
+    opacity: .9;
+    filter: none;
+    transform: scale(.82) rotate(-25deg);
+}
+
+.ghost,
+.icon-btn {
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--dim);
+    font-family: inherit;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color .2s, border-color .2s, box-shadow .2s;
+}
+
+.ghost {
+    font-size: .66rem;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    padding: .55rem .95rem;
+}
+
+.icon-btn {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    font-size: .95rem;
+    line-height: 1;
+}
+
+.icon-btn .icon-off {
+    display: none;
+}
+
+.icon-btn[aria-pressed="true"] {
+    color: #5b628f;
+}
+
+.icon-btn[aria-pressed="true"] .icon-on {
+    display: none;
+}
+
+.icon-btn[aria-pressed="true"] .icon-off {
+    display: block;
+}
+
+.ghost:hover,
+.icon-btn:hover {
+    color: var(--chalk);
+    border-color: var(--glow);
+    box-shadow: 0 0 18px rgba(124, 140, 255, .25);
+}
+
+/* ---------- spillebræt ---------- */
+
+.board {
+    display: grid;
+    grid-template-columns: minmax(220px, .72fr) 1.28fr;
+    gap: 2rem;
+    align-items: center;
+    min-height: 0;
+}
+
+.stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 0;
+    position: relative;
+}
+
+/* Fakkelskær bag galgen. */
+.stage::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 78%;
+    height: 78%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(245, 196, 81, .13) 0%, transparent 68%);
+    animation: flicker 3.2s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes flicker {
+    0%, 100% { opacity: .68; transform: translate(-50%, -50%) scale(1); }
+    43%      { opacity: 1;   transform: translate(-50%, -50%) scale(1.05); }
+    71%      { opacity: .8;  transform: translate(-50%, -50%) scale(.98); }
+}
+
+.gallows {
+    width: 100%;
+    height: 100%;
+    max-height: min(62vh, 620px);
+    overflow: visible;
+    position: relative;
+}
+
+.gallows path,
+.gallows circle {
+    fill: none;
+    stroke: var(--chalk);
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 7px var(--glow));
+    transition: stroke-dashoffset .55s cubic-bezier(.65, 0, .35, 1);
+}
+
+.gallows .frame {
+    stroke: var(--wood);
+    stroke-width: 7;
+    filter: drop-shadow(0 0 9px rgba(195, 169, 130, .4));
+    transition: stroke-dashoffset .7s cubic-bezier(.65, 0, .35, 1);
+}
+
+.gallows .rope {
+    stroke: var(--rope);
+    stroke-width: 5;
+    filter: drop-shadow(0 0 8px rgba(230, 189, 124, .5));
+}
+
+.gallows .fine {
+    stroke-width: 3.4;
+}
+
+.gallows .ground {
+    fill: rgba(124, 140, 255, .07);
+    stroke: none;
+    filter: none;
+}
+
+.gallows .ground-man {
+    fill: rgba(124, 140, 255, .05);
+}
+
+.body {
+    transform-origin: 200px 26px;
+}
+
+.body.sway {
+    animation: sway 3.6s ease-in-out infinite;
+}
+
+@keyframes sway {
+    0%, 100% { transform: rotate(-4deg); }
+    50%      { transform: rotate(4deg); }
+}
+
+.body.drop {
+    animation: drop 1.1s cubic-bezier(.5, 0, .9, .4) forwards;
+}
+
+@keyframes drop {
+    to { transform: translateY(360px) rotate(26deg); opacity: 0; }
+}
+
+/* ---------- ordet ---------- */
+
+.panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2rem;
+    min-width: 0;
+}
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .6rem;
+    padding: .45rem 1.05rem;
+    border-radius: 999px;
+    border: 1px solid rgba(245, 196, 81, .35);
+    background: rgba(245, 196, 81, .08);
+}
+
+.badge-label {
+    font-size: .58rem;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+
+.badge b {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--gold);
+}
+
+.remaining {
+    font-size: .72rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+
+.remaining b {
+    color: var(--chalk);
+    font-weight: 600;
+}
+
+.word {
+    --n: 8;
+    container-type: inline-size;
+    display: grid;
+    grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+    gap: .5rem;
+    width: 100%;
+    max-width: calc(var(--n) * 96px + (var(--n) - 1) * .5rem);
+}
+
+.tile {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    border-radius: 10px;
+    border: 1px solid rgba(124, 140, 255, .32);
+    border-bottom: 3px solid rgba(124, 140, 255, .55);
+    background: linear-gradient(180deg, rgba(28, 34, 66, .85), rgba(12, 16, 38, .85));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    perspective: 620px;
+    transition: border-color .35s, box-shadow .35s, background .35s, transform .3s;
+}
+
+.tile .glyph {
+    font-size: clamp(1.1rem, 3vw, 3rem);
+    font-size: min(3.4rem, calc(56cqw / var(--n)));
+    font-weight: 700;
+    line-height: 1;
+    color: transparent;
+    transform: rotateX(-92deg);
+    transform-origin: center bottom;
+    transition: transform .5s cubic-bezier(.2, 1.35, .4, 1), color .3s, text-shadow .3s;
+}
+
+.tile.filled {
+    border-color: var(--ok);
+    border-bottom-color: var(--ok);
+    background: linear-gradient(180deg, rgba(20, 62, 48, .85), rgba(9, 28, 22, .85));
+    box-shadow: 0 8px 22px -10px rgba(61, 220, 151, .9);
+    animation: tilePop .42s cubic-bezier(.2, 1.5, .4, 1);
+}
+
+@keyframes tilePop {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.12); }
+    100% { transform: scale(1); }
+}
+
+.tile.filled .glyph {
+    transform: rotateX(0);
+    color: #fff;
+    text-shadow: 0 0 16px rgba(61, 220, 151, .9), 0 0 40px rgba(61, 220, 151, .35);
+}
+
+.tile.revealed {
+    border-color: var(--bad);
+    border-bottom-color: var(--bad);
+    background: linear-gradient(180deg, rgba(63, 22, 34, .85), rgba(28, 10, 16, .85));
+}
+
+.tile.revealed .glyph {
+    transform: rotateX(0);
+    color: var(--bad);
+    text-shadow: 0 0 16px rgba(255, 93, 115, .8);
+}
+
+/* ---------- forkerte gæt ---------- */
+
+.misses {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    flex-wrap: wrap;
+    align-self: flex-start;
+    padding: .6rem .9rem;
+    border-radius: 12px;
+    background: rgba(255, 93, 115, .05);
+    min-height: 3rem;
+}
+
+.misses-label {
+    font-size: .62rem;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+
+.misses-list {
+    display: flex;
+    gap: .35rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.misses-empty {
+    font-size: .8rem;
+    color: #7d86bb;
+    font-style: italic;
+}
+
+.miss-chip {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 .35rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 93, 115, .45);
+    background: rgba(255, 93, 115, .12);
+    color: var(--bad);
+    font-size: 1rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: chipIn .3s cubic-bezier(.2, 1.4, .4, 1);
+}
+
+@keyframes chipIn {
+    from { transform: scale(.4); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- tastatur ---------- */
+
+.keys {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+    transition: opacity .5s, filter .5s;
+}
+
+/* Tastaturet er dimensioneret som på en telefon: ingen fysisk trappe-
+   forskydning, alle taster lige brede, og den korte ZXCVBNM-række centreret
+   under de to fulde rækker. --slots er 11, fordi de to øverste rækker har 11
+   taster — regnes basis ud fra et andet tal, bliver tasterne i den korte
+   række bredere end i de lange. */
+.keyboard {
+    --key-gap: 6px;
+    --slots: 11;
+    display: flex;
+    flex-direction: column;
+    gap: var(--key-gap);
+    align-items: center;
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+}
+
+.kb-row {
+    display: flex;
+    gap: var(--key-gap);
+    justify-content: center;
+    width: 100%;
+}
+
+.key {
+    flex: 0 1 calc((100% - (var(--slots) - 1) * var(--key-gap)) / var(--slots));
+    min-width: 0;
+    aspect-ratio: 4 / 5;   /* lidt højere end bred, som tasterne på en telefon */
+    height: auto;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, #151a35, #0d1128);
+    color: var(--chalk);
+    font-family: inherit;
+    font-weight: 500;
+    font-size: clamp(.85rem, 1.5vw, 1.25rem);
+    cursor: pointer;
+    transition: transform .15s, border-color .15s, box-shadow .15s, background .25s, color .25s;
+    box-shadow: 0 2px 0 #080b1a, inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+
+.key:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: var(--glow);
+    box-shadow: 0 5px 14px rgba(124, 140, 255, .32), 0 2px 0 #080b1a;
+}
+
+.key:focus-visible,
+.ghost:focus-visible,
+.icon-btn:focus-visible,
+.btn:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 3px;
+}
+
+.key:disabled {
+    cursor: default;
+}
+
+.key.hit {
+    background: linear-gradient(180deg, #12503a, #0b3226);
+    border-color: var(--ok);
+    color: var(--ok);
+    box-shadow: 0 0 18px rgba(61, 220, 151, .38);
+}
+
+.key.miss {
+    background: linear-gradient(180deg, #3f1622, #260d15);
+    border-color: #5c2231;
+    color: #c98494;
+    animation: keyShake .35s;
+}
+
+@keyframes keyShake {
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+.hint {
+    font-size: .62rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: #7d86bb;
+    text-align: center;
+    transition: opacity .6s;
+}
+
+.hint.faded {
+    opacity: 0;
+}
+
+/* ---------- resultat ---------- */
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9;
+    display: none;
+    /* Hul i midten så det afslørede ord bliver stående i fuldt lys. */
+    background: radial-gradient(46% 42% at var(--hx, 50%) var(--hy, 38%), transparent 0%, rgba(4, 6, 16, .9) 78%);
+}
+
+.overlay.show {
+    display: grid;
+    place-items: end center;
+    padding-bottom: 5vh;
+    animation: fadeIn .4s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.result {
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+    padding: 2.2rem 3.2rem;
+    border-radius: 22px;
+    border: 1px solid rgba(255, 255, 255, .18);
+    background: linear-gradient(180deg, rgba(26, 32, 64, .97), rgba(10, 13, 32, .98));
+    backdrop-filter: blur(14px);
+    box-shadow: 0 40px 100px rgba(0, 0, 0, .85);
+    animation: pop .45s cubic-bezier(.2, 1.3, .4, 1);
+    max-width: 92vw;
+}
+
+/* Farvet kant i toppen fortæller udfaldet før man har læst teksten. */
+.result::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+}
+
+.result.win::before {
+    background: linear-gradient(90deg, transparent, var(--ok), transparent);
+}
+
+.result.lose::before {
+    background: linear-gradient(90deg, transparent, var(--bad), transparent);
+}
+
+@keyframes pop {
+    from { transform: scale(.88); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+}
+
+.result h2 {
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: clamp(1.7rem, 5vw, 2.4rem);
+    letter-spacing: .08em;
+    margin-bottom: .4rem;
+}
+
+.result.win h2 {
+    color: var(--ok);
+    text-shadow: 0 0 30px rgba(61, 220, 151, .5);
+}
+
+.result.lose h2 {
+    color: var(--bad);
+    text-shadow: 0 0 30px rgba(255, 93, 115, .5);
+}
+
+.result p {
+    color: #9aa2ce;
+    margin-bottom: 1.5rem;
+}
+
+.result p:empty {
+    display: none;
+}
+
+.result p b {
+    color: #fff;
+    letter-spacing: .16em;
+}
+
+.btn {
+    padding: .8rem 2rem;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    font-size: .78rem;
+    color: #0a0d1d;
+    background: linear-gradient(180deg, #fff, var(--gold));
+    box-shadow: 0 0 30px rgba(245, 196, 81, .4);
+    transition: transform .15s;
+}
+
+.btn-key {
+    opacity: .55;
+    margin-left: .35rem;
+}
+
+.btn:hover {
+    transform: translateY(-2px) scale(1.03);
+}
+
+/* ---------- tablet ---------- */
+
+@media (max-width: 1024px) {
+    body {
+        overflow: auto;
+    }
+
+    .wrap {
+        /* 100vw ville tælle den lodrette scrollbar med og give 15px vandret overløb. */
+        width: 100%;
+        height: auto;
+        min-height: 100%;
+        padding: .9rem .7rem 1rem;
+    }
+
+    .board {
+        grid-template-columns: 1fr;
+        gap: .9rem;
+    }
+
+    .stage {
+        order: -1;
+    }
+
+    .gallows {
+        max-height: 34vh;
+        min-height: 210px;
+    }
+
+    .panel {
+        gap: 1.1rem;
+    }
+
+    .word {
+        max-width: min(100%, calc(var(--n) * 74px + (var(--n) - 1) * .5rem));
+    }
+
+    /* På smalle skærme sættes højden fast i stedet for via aspect-ratio.
+       Med et ratio + en min-højde vinder ratioen og trækker BREDDEN op over
+       flex-basis, så de 11 taster tilsammen bliver bredere end skærmen. */
+    .key {
+        aspect-ratio: auto;
+        height: 48px;
+    }
+}
+
+/* ---------- mobil ---------- */
+
+@media (max-width: 620px) {
+    .topbar {
+        gap: .6rem;
+    }
+
+    .hud {
+        gap: .7rem;
+    }
+
+    .lives-label {
+        display: none;
+    }
+
+    .heart {
+        width: 17px;
+        height: 17px;
+    }
+
+    .moon {
+        width: 74px;
+        height: 74px;
+        top: auto;
+        bottom: 4%;
+        right: 5%;
+        opacity: .45;
+    }
+
+    .gallows {
+        max-height: 22vh;
+    }
+
+    .panel-head {
+        gap: .6rem;
+    }
+
+    .badge {
+        padding: .35rem .8rem;
+    }
+
+    .badge-label {
+        display: none;
+    }
+
+    .badge b {
+        font-size: .92rem;
+    }
+
+    .remaining {
+        font-size: .64rem;
+    }
+
+    .tile .glyph {
+        font-size: min(2rem, calc(66cqw / var(--n)));
+    }
+
+    .misses {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: .45rem;
+        width: 100%;
+    }
+
+    .word {
+        gap: .3rem;
+    }
+
+    /* Gap sættes på variablen, ikke på rækken — ellers regner tasternes
+       flex-basis videre med den brede afstand og rækken bliver for bred. */
+    .keyboard {
+        --key-gap: 4px;
+    }
+
+    .key {
+        border-radius: 6px;
+        font-size: .95rem;
+    }
+
+    .result {
+        padding: 1.8rem 1.6rem;
+    }
+
+    .overlay.show {
+        padding-bottom: 7vh;
+    }
+}
+
+@media (hover: none) {
+    .key {
+        min-height: 48px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+    }
+}

@@ -1,0 +1,110 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Spil";
+}
+
+<div class="sky"></div>
+<div class="moon"></div>
+<div class="stars" id="stars" aria-hidden="true"></div>
+<div class="fog fog-a" aria-hidden="true"></div>
+<div class="fog fog-b" aria-hidden="true"></div>
+<div class="danger" id="danger" aria-hidden="true"></div>
+<div class="vignette" id="vignette" aria-hidden="true"></div>
+<canvas id="confetti" aria-hidden="true"></canvas>
+<div class="flash" id="flash" aria-hidden="true"></div>
+
+<p class="sr-only" id="srStatus" role="status" aria-live="polite"></p>
+
+<div class="wrap" id="wrap">
+
+    <header class="topbar">
+        <h1>GALGELEG<small>DANSK UDGAVE</small></h1>
+
+        <div class="hud">
+            <div class="streak" id="streak" hidden>
+                <span class="streak-count" id="streakCount">0</span>
+                <span class="streak-label">i træk</span>
+            </div>
+
+            <div class="lives">
+                <span class="lives-label">Liv</span>
+                <div class="hearts" id="hearts" role="img" aria-label="Liv tilbage"></div>
+            </div>
+
+            <button type="button" class="icon-btn" id="mute" aria-pressed="false" title="Lyd til/fra">
+                <span class="icon-on" aria-hidden="true">♪</span>
+                <span class="icon-off" aria-hidden="true">✕</span>
+                <span class="sr-only">Lyd til eller fra</span>
+            </button>
+
+            <button type="button" class="ghost" id="newGame">Nyt ord</button>
+        </div>
+    </header>
+
+    <main class="board">
+
+        <section class="stage" aria-hidden="true">
+            <svg class="gallows" viewBox="0 0 300 340" preserveAspectRatio="xMidYMid meet">
+                <ellipse class="ground" cx="70" cy="308" rx="74" ry="9" />
+                <ellipse class="ground ground-man" cx="200" cy="308" rx="46" ry="7" />
+
+                <path class="frame" data-frame="0" d="M22 306 H120" />
+                <path class="frame" data-frame="1" d="M68 306 V26" />
+                <path class="frame" data-frame="2" d="M68 26 H200" />
+                <path class="frame" data-frame="3" d="M68 70 L112 26" />
+                <path class="rope"  data-frame="4" d="M200 26 V60 M194 63 H206 M194 68 H206 M200 70 V76" />
+
+                <g class="body" id="body">
+                    <circle data-part="0" cx="200" cy="96" r="20" />
+                    <path   data-part="1" d="M200 116 V190" />
+                    <path   data-part="2" d="M200 134 L164 166" />
+                    <path   data-part="3" d="M200 134 L236 166" />
+                    <path   data-part="4" d="M200 190 L168 240" />
+                    <path   data-part="5" d="M200 190 L232 240" />
+                    <path   data-part="6" class="fine" d="M187 89 L195 97" />
+                    <path   data-part="7" class="fine" d="M195 89 L187 97" />
+                    <path   data-part="8" class="fine" d="M205 89 L213 97" />
+                    <path   data-part="9" class="fine" d="M213 89 L205 97" />
+                    <path   data-part="10" class="fine" d="M190 111 Q200 102 210 111" />
+                </g>
+            </svg>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head">
+                <p class="badge">
+                    <span class="badge-label">Kategori</span>
+                    <b id="category">—</b>
+                </p>
+                <p class="remaining" id="remaining"></p>
+            </div>
+
+            <div class="word" id="word" aria-hidden="true"></div>
+
+            <div class="misses">
+                <span class="misses-label">Forkerte gæt</span>
+                <div class="misses-list" id="missList"><span class="misses-empty">ingen endnu</span></div>
+            </div>
+        </section>
+
+    </main>
+
+    <div class="keys">
+        <section class="keyboard" id="keyboard" aria-label="Bogstaver"></section>
+        <p class="hint" id="hint">Klik et bogstav — eller brug tastaturet · Æ Ø Å virker · Enter = nyt ord</p>
+    </div>
+
+</div>
+
+<div class="overlay" id="overlay">
+    <div class="result" id="result" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+        <h2 id="resultTitle"></h2>
+        <p id="resultText"></p>
+        <button type="button" class="btn" id="playAgain">Nyt spil <span class="btn-key">⏎</span></button>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/hangman.js" asp-append-version="true"></script>
+}

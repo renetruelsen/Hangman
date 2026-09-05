@@ -4,8 +4,9 @@ namespace Hangman.Game;
 public sealed record WordEntry(string Word, string Category);
 
 /// <summary>
-/// Ordbanken. Alle ord er 6-10 tegn, skrevet med store bogstaver
-/// og kun med tegn fra det danske alfabet (A-Z + Æ Ø Å).
+/// Nødplan. Ordene her bruges KUN når online-kilden ikke kan nås — den
+/// almindelige pulje hentes af <see cref="OnlineWordSource"/>.
+/// Alle ord er 6-10 tegn, store bogstaver, kun A-Z + Æ Ø Å.
 /// </summary>
 public static class WordBank
 {
@@ -150,6 +151,9 @@ public static class WordBank
     ];
 
     public static int Count => Entries.Length;
+
+    /// <summary>Hele nødplanen, til brug når online-kilden er nede.</summary>
+    public static IReadOnlyList<WordEntry> All => Entries;
 
     /// <summary>Trækker et tilfældigt ord. Undgår at gentage det ord der lige er spillet.</summary>
     public static WordEntry Draw(string? previousWord = null)

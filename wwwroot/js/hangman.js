@@ -320,7 +320,9 @@
     /* ---------- spilstart ---------- */
 
     async function fetchWord() {
-        const query = state.previous ? '?seneste=' + encodeURIComponent(state.previous) : '';
+        /* Serveren holder selv styr på hvilke ord denne browser har haft (via
+           en cookie), så klienten behøver ikke sende noget med. */
+        const query = '';
         try {
             /* Uden timeout hænger et svarløst /api/word for evigt: try/catch
                fanger kun et rigtigt HTTP-fejlsvar eller en JSON-parse-fejl,
